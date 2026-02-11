@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, createContext, useContext, ReactNode } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { WindowState } from './types'
 
 interface WindowManagerContextType {
@@ -37,18 +38,48 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
         const existing = prev.find(w => w.id === window.id)
         if (existing) {
           if (existing.isMinimized) {
+            Sentry.logger.info('Window restored from minimized state', {
+              extra: { window_id: window.id, window_title: window.title }
+            })
+
+            Sentry.metrics.increment('window.restore', 1, {
+              tags: { window_id: window.id }
+            })
+
             return prev.map(w =>
               w.id === window.id
                 ? { ...w, isMinimized: false, isFocused: true, zIndex: newZ }
                 : { ...w, isFocused: false }
             )
           }
+
+          Sentry.logger.debug('Window focused (already open)', {
+            extra: { window_id: window.id, window_title: window.title }
+          })
+
           return prev.map(w =>
             w.id === window.id
               ? { ...w, isFocused: true, zIndex: newZ }
               : { ...w, isFocused: false }
           )
         }
+
+        Sentry.logger.info('New window opened', {
+          extra: {
+            window_id: window.id,
+            window_title: window.title,
+            width: window.width,
+            height: window.height
+          }
+        })
+
+        Sentry.metrics.increment('window.open', 1, {
+          tags: { window_id: window.id }
+        })
+
+        const newWindowCount = prev.length + 1
+        Sentry.metrics.gauge('window.active_count', newWindowCount)
+
         return [
           ...prev.map(w => ({ ...w, isFocused: false })),
           { ...window, zIndex: newZ, isFocused: true }
@@ -59,19 +90,63 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const closeWindow = useCallback((id: string) => {
-    setWindows(prev => prev.filter(w => w.id !== id))
+    setWindows(prev => {
+      const window = prev.find(w => w.id === id)
+      if (window) {
+        Sentry.logger.info('Window closed', {
+          extra: { window_id: id, window_title: window.title }
+        })
+
+        Sentry.metrics.increment('window.close', 1, {
+          tags: { window_id: id }
+        })
+
+        const newWindowCount = prev.length - 1
+        Sentry.metrics.gauge('window.active_count', newWindowCount)
+      }
+
+      return prev.filter(w => w.id !== id)
+    })
   }, [])
 
   const minimizeWindow = useCallback((id: string) => {
-    setWindows(prev => prev.map(w =>
-      w.id === id ? { ...w, isMinimized: true, isFocused: false } : w
-    ))
+    setWindows(prev => {
+      const window = prev.find(w => w.id === id)
+      if (window) {
+        Sentry.logger.info('Window minimized', {
+          extra: { window_id: id, window_title: window.title }
+        })
+
+        Sentry.metrics.increment('window.minimize', 1, {
+          tags: { window_id: id }
+        })
+      }
+
+      return prev.map(w =>
+        w.id === id ? { ...w, isMinimized: true, isFocused: false } : w
+      )
+    })
   }, [])
 
   const maximizeWindow = useCallback((id: string) => {
-    setWindows(prev => prev.map(w =>
-      w.id === id ? { ...w, isMaximized: !w.isMaximized } : w
-    ))
+    setWindows(prev => {
+      const window = prev.find(w => w.id === id)
+      if (window) {
+        const action = window.isMaximized ? 'restore' : 'maximize'
+
+        Sentry.logger.info(`Window ${action}d`, {
+          extra: { window_id: id, window_title: window.title }
+        })
+
+        Sentry.metrics.increment(`window.${action}`, 1, {
+          tags: { window_id: id }
+        })
+      }
+
+      return prev.map(w =>
+        w.id === id ? { ...w, isMaximized: !w.isMaximized } : w
+      )
+    })
   }, [])
 
   const restoreWindow = useCallback((id: string) => {
@@ -99,15 +174,45 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateWindowPosition = useCallback((id: string, x: number, y: number) => {
-    setWindows(prev => prev.map(w =>
-      w.id === id ? { ...w, x, y } : w
-    ))
+    setWindows(prev => {
+      const window = prev.find(w => w.id === id)
+      if (window) {
+        Sentry.logger.debug('Window position updated', {
+          extra: { window_id: id, x, y }
+        })
+
+        Sentry.metrics.increment('window.position_update', 1, {
+          tags: { window_id: id }
+        })
+      }
+
+      return prev.map(w =>
+        w.id === id ? { ...w, x, y } : w
+      )
+    })
   }, [])
 
   const updateWindowSize = useCallback((id: string, width: number, height: number) => {
-    setWindows(prev => prev.map(w =>
-      w.id === id ? { ...w, width, height } : w
-    ))
+    setWindows(prev => {
+      const window = prev.find(w => w.id === id)
+      if (window) {
+        Sentry.logger.debug('Window size updated', {
+          extra: { window_id: id, width, height }
+        })
+
+        Sentry.metrics.increment('window.resize', 1, {
+          tags: { window_id: id }
+        })
+
+        Sentry.metrics.gauge('window.size', width * height, {
+          tags: { window_id: id }
+        })
+      }
+
+      return prev.map(w =>
+        w.id === id ? { ...w, width, height } : w
+      )
+    })
   }, [])
 
   return (
