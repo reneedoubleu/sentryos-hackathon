@@ -1,6 +1,6 @@
 'use client'
 
-import * as Sentry from '@sentry/nextjs'
+import { logger, incrementMetric } from '@/lib/sentry-utils'
 import { WindowManagerProvider, useWindowManager } from './WindowManager'
 import { Window } from './Window'
 import { Taskbar } from './Taskbar'
@@ -60,11 +60,11 @@ function DesktopContent() {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
 
   const openInstallGuide = () => {
-    Sentry.logger.info('Opening Install Guide app', {
+    logger.info('Opening Install Guide app', {
       extra: { app_type: 'notepad', document: 'install_guide' }
     })
 
-    Sentry.metrics.increment('app.launch', 1, {
+    incrementMetric('app.launch', 1, {
       tags: { app_type: 'notepad', app_id: 'install-guide' }
     })
 
@@ -85,11 +85,11 @@ function DesktopContent() {
   }
 
   const openChatWindow = () => {
-    Sentry.logger.info('Opening Chat app', {
+    logger.info('Opening Chat app', {
       extra: { app_type: 'chat', app_id: 'chat' }
     })
 
-    Sentry.metrics.increment('app.launch', 1, {
+    incrementMetric('app.launch', 1, {
       tags: { app_type: 'chat', app_id: 'chat' }
     })
 
@@ -112,11 +112,11 @@ function DesktopContent() {
   const openAgentsFolder = () => {
     const agentsFolderItems: FolderItem[] = []
 
-    Sentry.logger.info('Opening Agents folder', {
+    logger.info('Opening Agents folder', {
       extra: { app_type: 'folder', folder_name: 'agents', item_count: agentsFolderItems.length }
     })
 
-    Sentry.metrics.increment('app.launch', 1, {
+    incrementMetric('app.launch', 1, {
       tags: { app_type: 'folder', app_id: 'agents-folder' }
     })
 
